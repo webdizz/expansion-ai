@@ -55,16 +55,14 @@ class ExpansionAiEnv(gym.Env):
         self.move(action)
         reward = self.game_finished()
         logger.debug(
-            'Env movement after step {} for action "{}" for armies {} with state \n{}\n lead to new state \n{}\n'.format(
+            'Env movement after step {} for action "{}" for armies {} lead to new state \n{}\n'.format(
                 self.step_num, action,
                 self.armies,
-                prev_state[
-                    0],
                 self.state[
                     0]))
 
         self.done = reward != 0
-        return self.state, reward, self.done, {'state': self.state}
+        return self.state, reward, self.done, {'state': self.state, 'step': self.step_num, 'armies': self.armies}
 
     def _reset(self):
         self.step_num = 0
@@ -73,8 +71,6 @@ class ExpansionAiEnv(gym.Env):
         logger.debug("Env model initial state: \n{}".format(self.state[0]))
         # place armies to initial state
         self.state[0, self.board_size - 1 - self.offset_y, self.offset_x] = self.armies
-        # print("= Model with my armies state: {}".format(self.state))
-        # TODO: add first moves
         return self.state
 
     def _render(self, mode='ansi', close=False):
@@ -153,7 +149,7 @@ class ExpansionAiEnv(gym.Env):
     def game_finished(self):
         # Returns 1 if player 1 wins, -1 if player 2 wins and 0 otherwise
         self.armies = current_num_of_armies = np.sum(self.state[0], dtype=np.int32)
-        logger.debug("Env current armies num %s" % (current_num_of_armies))
+        logger.debug("Env current armies num %s" % current_num_of_armies)
         if 0 not in self.state[0]:
             logger.info("Env wow, is about to get a reward \n{}\n".format((self.state[0])))
             return 1
