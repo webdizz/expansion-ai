@@ -67,8 +67,11 @@ def test(rank, params, shared_model):
             actions.clear()  # reinitializing the actions
             state = env.reset()  # reinitializing the environment
             time.sleep(60)  # doing a one minute break to let the other agents practice (if the game is done)
-        logger.debug(
-            "Test Action {} at episode {} and current reward {} for state \n{}".format(action, episode_length,
-                                                                                       reward_sum,
-                                                                                       state[1]))
+        if episode_length % 100 == 0:
+            logger.info(
+                "Test episode {} and current rewards {} with armies {} occupied cells {} and movable cells {}".format(
+                    episode_length,
+                    reward, env.unwrapped.armies, env.unwrapped.occupied_cells_num,
+                    env.unwrapped.movable_cells_num
+                ))
         state = torch.from_numpy(state)  # new state and we continue

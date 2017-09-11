@@ -83,16 +83,23 @@ def train(rank, params, shared_model, optimizer):
                     action_to_take,
                     reward, done,
                     step,
-                    episode_length, state[0]))
+                    episode_length, state[1]))
+
+            if episode_length % 100 == 0:
+                logger.info(
+                    "Train episode {} and current rewards {} with armies {} occupied cells {} and movable cells {}".format(
+                        episode_length,
+                        rewards, env.unwrapped.armies, env.unwrapped.occupied_cells_num,
+                        env.unwrapped.movable_cells_num
+                    ))
 
             if done:  # if the episode is done:
                 episode_length = 0  # we restart the environment
                 prev_state = state
                 state = env.reset()  # we restart the environment
                 logger.info(
-                    "Episode reward {}, episode length {} steps {} with state \n{} ".format(reward, episode_length,
-                                                                                            step,
-                                                                                            prev_state[0]))
+                    "Train episode reward {}, episode length {} steps {}".format(reward, episode_length,
+                                                                                 step))
 
             state = torch.from_numpy(state).float()  # tensorizing the new state
             values.append(value)  # storing the value V(S) of the state

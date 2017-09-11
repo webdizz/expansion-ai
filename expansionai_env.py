@@ -20,6 +20,7 @@ class ExpansionAiEnv(gym.Env):
         assert isinstance(board_size, int) and board_size >= 1, 'Invalid board size: {}'.format(board_size)
         self.board_size = board_size
         self.armies = armies
+        self.initial_armies = armies
         self.offset_x = offset_x
         self.offset_y = offset_y
 
@@ -44,8 +45,6 @@ class ExpansionAiEnv(gym.Env):
         self.observation_space = spaces.Box(-4, 20, shape=400)
         logger.info("Env action_space: %s and observation_space: %s" % (self.action_space, self.observation_space))
 
-        self.occupied_cells_num = 0
-        self.movable_cells_num = 0
         self._seed()
 
     def _seed(self, seed=None):
@@ -68,18 +67,8 @@ class ExpansionAiEnv(gym.Env):
                 self.armies,
                 self.state[MY_LAYER]))
 
-        self.done = reward != 0
+        self.done = reward >= 1 or reward == -1
         return self.state, reward, self.done, {'state': self.state, 'step': self.step_num, 'armies': self.armies}
-
-    def _reset(self):
-        self.step_num = 0
-        self.state = np.zeros((2, self.board_size, self.board_size))
-        self.done = False
-        # place armies to initial state
-        self.state[MY_LAYER, self.board_size - 1 - self.offset_y, self.offset_x] = self.armies
-        self.state[MY_LAYER, self.board_size - 2 - self.offset_y, self.offset_x] = self.armies
-        logger.debug("Env model initial state: \n{}".format(self.state[MY_LAYER]))
-        return self.state
 
     def move(self, actions_squared, new_armies=10):
         occupied_cells = self.resolve_occupied_cells()
@@ -102,6 +91,19 @@ class ExpansionAiEnv(gym.Env):
             self.state[MY_LAYER, to_pos[0], to_pos[1]] = new_armies + current_armies_in_cell + armies_to_move
 
         logger.debug("New board state {}".format(self.state[MY_LAYER]))
+
+    def _reset(self):
+        self.step_num = 0
+        self.state = np.zeros((2, self.board_size, self.board_size))
+        self.done = False
+        # place armies to initial state
+        self.state[MY_LAYER, :, :] = 0
+        self.armies = self.initial_armies
+        self.state[MY_LAYER, self.board_size - 2 - self.offset_y, self.offset_x] = self.armies
+        self.resolve_occupied_cells()
+        self.resolve_movable_cells()
+        logger.debug("Env model initial state: \n{}".format(self.state[MY_LAYER]))
+        return self.state
 
     def resolve_movable_cells(self):
         movable_cells = np.argwhere(self.state[MY_LAYER] > 1)
@@ -143,50 +145,67 @@ class ExpansionAiEnv(gym.Env):
         # Returns 1 if player 1 wins, -1 if player 2 wins and 0 otherwise
         self.armies = current_num_of_armies = np.sum(self.state[MY_LAYER], dtype=np.int32)
         logger.debug("Env current armies num %s" % current_num_of_armies)
+        occupied_cells_num = self.occupied_cells_num
+        self.resolve_occupied_cells()
+        current_occupied_cells_num = self.occupied_cells_num
+
+        movable_cells_num = self.movable_cells_num
+        self.resolve_movable_cells()
+        current_movable_cells = self.movable_cells_num
+
         if 0 not in self.state[MY_LAYER]:
             logger.info("Env wow, is about to get a reward \n{}\n".format((self.state[MY_LAYER])))
             return 1
-        elif current_num_of_armies <= 0 or current_num_of_armies > 6000:
+        elif (current_num_of_armies <= 0 or current_num_of_armies > 6000) and self.step_num > 0:
             return -1  # our army was destroyed
         elif np.argwhere(self.state[MY_LAYER] < 0).size > 0:
             return -1
+        elif self.step_num >= 600:
+            return -1
+        elif current_occupied_cells_num - occupied_cells_num > 2:
+            return 0.01
+        elif current_movable_cells - movable_cells_num > 2:
+            return 0.05
+        elif current_occupied_cells_num > 200:
+            return 0.005
         else:
             return 0
 
-    def _render(self, mode='ansi', close=False):
-        """ Renders environment """
-        logger.debug('Env render was executed with mode "{}" and close "{}'.format(mode, close))
-        if close:
-            return
 
-        # process board
-        board = self.state
-        out_file = StringIO() if mode == 'ansi' else sys.stdout
-        out_file.write(' ' * 13)
+def _render(self, mode='ansi', close=False):
+    """ Renders environment """
+    logger.debug('Env render was executed with mode "{}" and close "{}'.format(mode, close))
+    if close:
+        return
+
+    # process board
+    board = self.state
+    out_file = StringIO() if mode == 'ansi' else sys.stdout
+    out_file.write(' ' * 13)
+    out_file.write('\t')
+
+    for column in range(board.shape[1]):
+        out_file.write('\t' + str(column + 1) + '|')
+    out_file.write('\n')
+
+    # underline
+    out_file.write('\t')
+    out_file.write('-' * (self.board_size * 11 - 2))
+    out_file.write('\n')
+    # end of header #
+
+    for row in range(board.shape[1]):
         out_file.write('\t')
-
+        out_file.write(str(row + 1) + '\t|')
         for column in range(board.shape[1]):
-            out_file.write('\t' + str(column + 1) + '|')
+            out_file.write(str(board[MY_LAYER, row, column]))
+            out_file.write('\t|')
         out_file.write('\n')
 
-        # underline
+        # horizontal line
         out_file.write('\t')
-        out_file.write('-' * (self.board_size * 11 - 2))
+        out_file.write('-' * (self.board_size * 11 - 3))
         out_file.write('\n')
-        # end of header #
 
-        for row in range(board.shape[1]):
-            out_file.write('\t')
-            out_file.write(str(row + 1) + '\t|')
-            for column in range(board.shape[1]):
-                out_file.write(str(board[MY_LAYER, row, column]))
-                out_file.write('\t|')
-            out_file.write('\n')
-
-            # horizontal line
-            out_file.write('\t')
-            out_file.write('-' * (self.board_size * 11 - 3))
-            out_file.write('\n')
-
-        if mode != 'live':
-            return out_file
+    if mode != 'live':
+        return out_file

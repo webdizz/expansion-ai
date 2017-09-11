@@ -16,7 +16,7 @@ logging.basicConfig(format=LOGGING_FORMAT)
 
 # logging.getLogger('Model').setLevel(logging.INFO)
 # logging.getLogger('ExpansionAiEnv').setLevel(logging.DEBUG)
-# logging.getLogger('Train').setLevel(logging.INFO)
+logging.getLogger('Train').setLevel(logging.INFO)
 logging.getLogger('Test').setLevel(logging.INFO)
 
 # Main run
