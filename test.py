@@ -48,7 +48,7 @@ def test(rank, params, shared_model):
         value, action_value, (hx, cx) = model((Variable(state.float().unsqueeze(0), volatile=True), (hx, cx)))
         prob = F.softmax(action_value)
         # the test agent does not explore, it directly plays the best action
-        action = prob.max(1, keepdim=True)[1].data.numpy()[0][0]
+        action = prob.max(1, keepdim=True)[1].data.numpy()
 
         state, reward, done, _ = env.step(action)  # done = done or episode_length >= params.max_episode_length
         done = done or episode_length >= params.max_episode_length
@@ -67,8 +67,8 @@ def test(rank, params, shared_model):
             actions.clear()  # reinitializing the actions
             state = env.reset()  # reinitializing the environment
             time.sleep(60)  # doing a one minute break to let the other agents practice (if the game is done)
-        logger.info(
+        logger.debug(
             "Test Action {} at episode {} and current reward {} for state \n{}".format(action, episode_length,
                                                                                        reward_sum,
-                                                                                       state[0]))
+                                                                                       state[1]))
         state = torch.from_numpy(state)  # new state and we continue

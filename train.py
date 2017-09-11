@@ -2,6 +2,7 @@
 
 import logging
 
+import numpy as np
 import torch
 import torch.nn.functional as F
 from torch.autograd import Variable
@@ -66,11 +67,12 @@ def train(rank, params, shared_model, optimizer):
             entropy = -(log_prob * prob).sum(1)  # H(p) = - sum_x p(x).log(p(x))
             entropies.append(entropy)  # storing the computed entropy
 
-            action = prob.multinomial().data  # selecting an action by taking a random draw from the prob distribution
+            # selecting an actions by taking a random draw from the prob distribution
+            action = prob.multinomial().data
             log_prob = log_prob.gather(1, Variable(action))  # getting the log prob associated to this selected action
 
             # playing the selected action, reaching the new state, and getting the new reward
-            action_to_take = action.numpy()[0][0]
+            action_to_take = action.numpy()
             state, reward, done, _ = env.step(action_to_take)
             # if the episode lasts too long (the agent is stucked), then it is done
             done = (done or episode_length >= params.max_episode_length)

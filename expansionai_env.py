@@ -9,6 +9,8 @@ from six import StringIO
 
 logger = logging.getLogger('ExpansionAiEnv')
 
+MY_LAYER = 1
+
 
 class ExpansionAiEnv(gym.Env):
     metadata = {'render.modes': ['ansi']}
@@ -36,10 +38,14 @@ class ExpansionAiEnv(gym.Env):
         self.move_right = [1, 2, 3]
 
         # TODO: add armies into account
-        self.action_space = spaces.Discrete(board_size * board_size * self.cell_movements)
-        observation = self.reset()
-        self.observation_space = spaces.Box(np.zeros(observation.shape), np.ones(observation.shape))
+        self.action_space = spaces.Discrete(self.cell_movements)
+        # self.action_space = spaces.Box(0, 8, shape=400)
+        # .Discrete(board_size * board_size * self.cell_movements)
+        self.observation_space = spaces.Box(-4, 20, shape=400)
         logger.info("Env action_space: %s and observation_space: %s" % (self.action_space, self.observation_space))
+
+        self.occupied_cells_num = 0
+        self.movable_cells_num = 0
         self._seed()
 
     def _seed(self, seed=None):
@@ -51,15 +57,16 @@ class ExpansionAiEnv(gym.Env):
         self.step_num += 1
         if self.done:
             return self.state, 0., True, {'state': self.state}
-        prev_state = self.state
-        self.move(action)
+        # resize actions to have it squared to simplify coordination
+        actions_squared = np.resize(action, (20, 20))
+
+        self.move(actions_squared)
         reward = self.game_finished()
         logger.debug(
             'Env movement after step {} for action "{}" for armies {} lead to new state \n{}\n'.format(
                 self.step_num, action,
                 self.armies,
-                self.state[
-                    0]))
+                self.state[MY_LAYER]))
 
         self.done = reward != 0
         return self.state, reward, self.done, {'state': self.state, 'step': self.step_num, 'armies': self.armies}
@@ -68,10 +75,83 @@ class ExpansionAiEnv(gym.Env):
         self.step_num = 0
         self.state = np.zeros((2, self.board_size, self.board_size))
         self.done = False
-        logger.debug("Env model initial state: \n{}".format(self.state[0]))
         # place armies to initial state
-        self.state[0, self.board_size - 1 - self.offset_y, self.offset_x] = self.armies
+        self.state[MY_LAYER, self.board_size - 1 - self.offset_y, self.offset_x] = self.armies
+        self.state[MY_LAYER, self.board_size - 2 - self.offset_y, self.offset_x] = self.armies
+        logger.debug("Env model initial state: \n{}".format(self.state[MY_LAYER]))
         return self.state
+
+    def move(self, actions_squared, new_armies=10):
+        occupied_cells = self.resolve_occupied_cells()
+        movable_cells = self.resolve_movable_cells()
+
+        logger.debug(("Env occupied cells \n{}\n movable cells \n{}".format(occupied_cells, movable_cells)))
+
+        for cell_to_move in movable_cells:
+            movement_action = actions_squared[cell_to_move[0]][cell_to_move[1]]
+            to_pos = self.action_to_coordinate(movement_action, cell_to_move)
+            previously_armies_in_cell = self.state[MY_LAYER, cell_to_move[0], cell_to_move[1]]
+            armies_to_move = previously_armies_in_cell - 1
+            # keep at least 1 army in cell
+            self.state[MY_LAYER, cell_to_move[0], cell_to_move[1]] = previously_armies_in_cell - armies_to_move
+
+            current_armies_in_cell = self.state[MY_LAYER, to_pos[0], to_pos[1]]
+            logger.debug(
+                "Env move cell \n{}\n to new position \n{} according to {}".format(cell_to_move, to_pos,
+                                                                                   movement_action))
+            self.state[MY_LAYER, to_pos[0], to_pos[1]] = new_armies + current_armies_in_cell + armies_to_move
+
+        logger.debug("New board state {}".format(self.state[MY_LAYER]))
+
+    def resolve_movable_cells(self):
+        movable_cells = np.argwhere(self.state[MY_LAYER] > 1)
+        self.movable_cells_num = movable_cells.size
+        return movable_cells
+
+    def resolve_occupied_cells(self):
+        occupied_cells = np.argwhere(self.state[MY_LAYER] > 0)
+        self.occupied_cells_num = occupied_cells.size
+        return occupied_cells
+
+    def action_to_coordinate(self, movement_action, current_position):
+        movement_action = np.argwhere(self.board_action_space == self.board_action_space_flatten[movement_action])[0]
+
+        next_position_row = current_position[0]
+        if np.argwhere(self.move_up == movement_action[1]) > -1:
+            next_position_row -= 1
+        elif np.argwhere(self.move_down == movement_action[1]) > -1:
+            next_position_row += 1
+        if next_position_row == -1:
+            next_position_row = current_position[0]
+        if next_position_row > self.board_size - 1:
+            next_position_row = current_position[0]
+
+        next_position_col = current_position[1]
+        if np.argwhere(self.move_left == movement_action[1]) > -1:
+            next_position_col -= 1
+        elif np.argwhere(self.move_right == movement_action[1]) > -1:
+            next_position_col += 1
+        if next_position_col == -1:
+            next_position_col = current_position[1]
+        if next_position_col > self.board_size - 1:
+            next_position_col = current_position[1]
+
+        next_position = [next_position_row, next_position_col]
+        return next_position
+
+    def game_finished(self):
+        # Returns 1 if player 1 wins, -1 if player 2 wins and 0 otherwise
+        self.armies = current_num_of_armies = np.sum(self.state[MY_LAYER], dtype=np.int32)
+        logger.debug("Env current armies num %s" % current_num_of_armies)
+        if 0 not in self.state[MY_LAYER]:
+            logger.info("Env wow, is about to get a reward \n{}\n".format((self.state[MY_LAYER])))
+            return 1
+        elif current_num_of_armies <= 0 or current_num_of_armies > 6000:
+            return -1  # our army was destroyed
+        elif np.argwhere(self.state[MY_LAYER] < 0).size > 0:
+            return -1
+        else:
+            return 0
 
     def _render(self, mode='ansi', close=False):
         """ Renders environment """
@@ -99,7 +179,7 @@ class ExpansionAiEnv(gym.Env):
             out_file.write('\t')
             out_file.write(str(row + 1) + '\t|')
             for column in range(board.shape[1]):
-                out_file.write(str(board[0, row, column]))
+                out_file.write(str(board[MY_LAYER, row, column]))
                 out_file.write('\t|')
             out_file.write('\n')
 
@@ -110,50 +190,3 @@ class ExpansionAiEnv(gym.Env):
 
         if mode != 'live':
             return out_file
-
-    def move(self, action):
-        next_coordinates = self.action_to_coordinate(action)
-        new_armies = 1
-        current_armies_in_cell = self.state[0, next_coordinates[0], next_coordinates[1]]
-        self.state[0, next_coordinates[0], next_coordinates[1]] = new_armies + current_armies_in_cell
-        # print("New board state {}".format(self.state))
-
-    def action_to_coordinate(self, action):
-        action_movement = np.argwhere(self.board_action_space == self.board_action_space_flatten[action])[0]
-        current_position_value = self.board_flatten[action_movement[0]]
-        current_position = np.argwhere(self.board == current_position_value)[0]
-
-        next_position_row = current_position[0]
-        if np.argwhere(self.move_up == action_movement[1]) > -1:
-            next_position_row -= 1
-        elif np.argwhere(self.move_down == action_movement[1]) > -1:
-            next_position_row += 1
-        if next_position_row == -1:
-            next_position_row = current_position[0]
-        if next_position_row > self.board_size - 1:
-            next_position_row = current_position[0]
-
-        next_position_col = current_position[1]
-        if np.argwhere(self.move_left == action_movement[1]) > -1:
-            next_position_col -= 1
-        elif np.argwhere(self.move_right == action_movement[1]) > -1:
-            next_position_col += 1
-        if next_position_col == -1:
-            next_position_col = current_position[1]
-        if next_position_col > self.board_size - 1:
-            next_position_col = current_position[1]
-
-        next_position = [next_position_row, next_position_col]
-        return next_position
-
-    def game_finished(self):
-        # Returns 1 if player 1 wins, -1 if player 2 wins and 0 otherwise
-        self.armies = current_num_of_armies = np.sum(self.state[0], dtype=np.int32)
-        logger.debug("Env current armies num %s" % current_num_of_armies)
-        if 0 not in self.state[0]:
-            logger.info("Env wow, is about to get a reward \n{}\n".format((self.state[0])))
-            return 1
-        elif current_num_of_armies <= 0:
-            return -1  # our army was destroyed
-        else:
-            return 0

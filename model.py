@@ -53,7 +53,8 @@ class ActorCritic(nn.Module):
 
         self.lstm = nn.LSTMCell(self.params.board_dimension_size * self.params.board_size, self.params.lstm_size)
 
-        num_outputs = action_space.n
+        # num_outputs = int(action_space.high[0])  # action_space.num_discrete_space
+        num_outputs = int(action_space.n)  # action_space.num_discrete_space
 
         self.critic_linear = nn.Linear(256, 1)  # output = V(S)
         self.actor_linear = nn.Linear(256, num_outputs)  # output = Q(S, a)

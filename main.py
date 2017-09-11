@@ -15,15 +15,15 @@ LOGGING_FORMAT = '%(asctime)s - %(name)s - %(thread)d|%(process)d - %(levelname)
 logging.basicConfig(format=LOGGING_FORMAT)
 
 # logging.getLogger('Model').setLevel(logging.INFO)
-# logging.getLogger('WarlightEnv').setLevel(logging.INFO)
-logging.getLogger('Train').setLevel(logging.DEBUG)
-# logging.getLogger('Test').setLevel(logging.INFO)
+# logging.getLogger('ExpansionAiEnv').setLevel(logging.DEBUG)
+# logging.getLogger('Train').setLevel(logging.INFO)
+logging.getLogger('Test').setLevel(logging.INFO)
 
 # Main run
 os.environ['OMP_NUM_THREADS'] = '1'  # 1 thread per core
 params = Params()  # creating the params object from the Params class, that sets all the model parameters
-params.max_episode_length = 100
-params.num_processes = 1
+params.max_episode_length = 1_000_000
+params.num_processes = 3
 
 torch.manual_seed(params.seed)  # setting the seed (not essential)
 env = create_expansionai_env(params.env_name, params)  # we create an optimized environment thanks to universe
