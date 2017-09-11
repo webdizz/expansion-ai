@@ -13,8 +13,10 @@ register(
 
 def create_expansionai_env(env_id, video=False, params=Params()):
     gym.spec(env_id)._kwargs = {
-        'armies': params.initial_army_size,
-        'board_size': params.board_size
+        'armies': params.armies,
+        'board_size': params.board_size,
+        'offset_x': 0,
+        'offset_y': 0
     }
     env = gym.make(env_id)
     if video:

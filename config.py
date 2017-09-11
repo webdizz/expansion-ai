@@ -11,4 +11,6 @@ class Params():
         self.lstm_size = 256
         self.board_size = 20
         self.board_dimension_size = 2
-        self.initial_army_size = 5
+        self.armies = 10
+        self.offset_x = 0
+        self.offset_y = 0

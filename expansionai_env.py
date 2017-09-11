@@ -13,11 +13,14 @@ logger = logging.getLogger('ExpansionAiEnv')
 class ExpansionAiEnv(gym.Env):
     metadata = {'render.modes': ['ansi']}
 
-    def __init__(self, board_size=4, armies=4):
+    def __init__(self, board_size=4, armies=4, offset_x=0, offset_y=0):
         """ Initializes an env """
         assert isinstance(board_size, int) and board_size >= 1, 'Invalid board size: {}'.format(board_size)
         self.board_size = board_size
         self.armies = armies
+        self.offset_x = offset_x
+        self.offset_y = offset_y
+
         self.cell_movements = 8  # 8 movements per cell
         logger.info('Env init was called with board size "%s" and armies "%s"' % (board_size, armies))
 
@@ -45,30 +48,31 @@ class ExpansionAiEnv(gym.Env):
 
     def _step(self, action):
         """ add step logic here """
-        # If already terminal, then don't do anything
+        self.step_num += 1
         if self.done:
             return self.state, 0., True, {'state': self.state}
         prev_state = self.state
         self.move(action)
         reward = self.game_finished()
-
         logger.debug(
-            'Env movement for action "{}" for armies {} with state \n{}\n lead to new state \n{}\n'.format(action,
-                                                                                                           self.armies,
-                                                                                                           prev_state[
-                                                                                                               0],
-                                                                                                           self.state[
-                                                                                                               0]))
+            'Env movement after step {} for action "{}" for armies {} with state \n{}\n lead to new state \n{}\n'.format(
+                self.step_num, action,
+                self.armies,
+                prev_state[
+                    0],
+                self.state[
+                    0]))
 
         self.done = reward != 0
         return self.state, reward, self.done, {'state': self.state}
 
     def _reset(self):
+        self.step_num = 0
         self.state = np.zeros((2, self.board_size, self.board_size))
         self.done = False
         logger.debug("Env model initial state: \n{}".format(self.state[0]))
-        # TODO: add place armies
-        self.state[0, :, :] = 0
+        # place armies to initial state
+        self.state[0, self.board_size - 1 - self.offset_y, self.offset_x] = self.armies
         # print("= Model with my armies state: {}".format(self.state))
         # TODO: add first moves
         return self.state
