@@ -167,7 +167,7 @@ class ExpansionAiEnv(gym.Env):
         elif current_movable_cells - movable_cells_num > 2:
             return 0.05
         elif current_occupied_cells_num > 200:
-            return 0.005
+            return 0.01
         else:
             return 0
 
